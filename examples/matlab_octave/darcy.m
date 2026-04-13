@@ -29,8 +29,8 @@ addpath('../../src/matlab_octave');
 
 % ---- grid ----
 k = 4;            % mimetic order (typical: 2, 4)
-m = 2*(k) + 2;            % cells in x
-n = 2*(k) + 1;            % cells in y
+m = 2*(k)+1;            % cells in x
+n = 2*(k)+1;            % cells in y
 dx = 1/m;
 dy = 1/n;
 
@@ -39,10 +39,17 @@ xc = [0 dx/2: dx :1-dx/2 1]';
 yc = [0 dy/2: dy :1-dy/2 1]';
 [Yc,Xc] = meshgrid(yc, xc);
 
+% interior cell centers 
+xc_int = [dx/2: dx :1-dx/2]';
+yc_int = [dy/2: dy :1-dy/2]';
+
 % faces
 xf = (0:dx:1)';
 yf = (0:dy:1)';
-[Yf,Xf] = meshgrid(yf, xf);
+% [Yf,Xf] = meshgrid(yf, xf);
+[Yf_x, Xf_x] = meshgrid(yc_int, xf);    % (m+1) x n  → x-faces
+[Yf_y, Xf_y] = meshgrid(yf, xc_int);    % m x (n+1)  → y-faces
+
 
 %Exact Solution (Calculated at the centers)
 a = -20 * pi;
@@ -61,7 +68,7 @@ bcl = bcl(2:end-1,1);
 bcr = bcr(2:end-1,1);
 v = {bcl;bcr;bcb;bct};
 
-alpha = 1; % 1, 10, or 100
+alpha = 100; % 1, 10, or 100
 
 % Gradient Operator
 G = grad2D(k, m, dx, n, dy);
@@ -69,18 +76,20 @@ G = grad2D(k, m, dx, n, dy);
 D = div2D(k, m, dx, n, dy);
 
 % Building tensor components at Faces
-C11F = Yf.^2 + alpha*Xf.^2;
-C1221F = (alpha - 1)*Xf.*Yf;
-C22F = Xf.^2 + alpha*Yf.^2;
+C11F = Yf_x.^2 + alpha*Xf_x.^2;
+C12F_x = (alpha - 1).*Xf_x.*Yf_x;
+C12F_y = (alpha - 1).*Xf_y.*Yf_y;
+C22F = Xf_y.^2 + alpha*Yf_y.^2;
 
 % Get dimension of Gradient Operator
-rowsGx = find(G(:, 2), 1)-1;
-rowsGy = size(G, 1)-rowsGx;
+rowsGx = (m+1)*n;
+rowsGy = m*(n+1);
 
 % Full Heterogeneous Anisotropic 2x2 Tensor at Faces
 K11 = spdiags(reshape(C11F, [], 1), 0, rowsGx, rowsGx);
-K12 = spdiags(reshape(C1221F, [], 1), 0, rowsGx, rowsGy);
-K21 = spdiags(reshape(C1221F, [], 1), 0, rowsGy, rowsGx);
+K12 = spdiags(reshape(C12F_x, [], 1), 0, rowsGx, rowsGy);
+% K21 = spdiags(reshape(C12F_y, [], 1), 0, rowsGy, rowsGx);
+K21 = K12';
 K22 = spdiags(reshape(C22F, [], 1), 0, rowsGy, rowsGy);
 
 K = [K11 K12;
@@ -124,7 +133,7 @@ ua = reshape(ua, m+2, n+2);
 % PLOTTING
 figure(69);
 contour3(Xc, Yc, ue);
-title("Exact Solution");
+title(sprintf("Exact Solution (alpha = %.2f)", alpha));
 shading interp;
 view([0 90]);
 colorbar;
@@ -132,7 +141,7 @@ colorbar;
 
 figure(420);
 contour3(Xc, Yc, ua);
-title("Approximate Solution");
+title(sprintf("Approximate Solution (alpha = %.2f)", alpha));
 shading interp;
 view([0 90]);
 colorbar;
