@@ -29,15 +29,11 @@ addpath('../../src/matlab_octave');
 
 % ---- grid ----
 k = 4;            % mimetic order (typical: 2, 4)
-m = 2*(k)+1;            % cells in x
-n = 2*(k)+1;            % cells in y
+m = 64;            % cells in x
+n = 64;            % cells in y
 dx = 1/m;
 dy = 1/n;
 
-Icf = interpolCentersToFacesD2D(k, m, n);
-Ifc = interpolFacesToCentersG2D(k, m, n);
-
-N  = (m+2)*(n+2);
 
 % cell centers (include boundary nodes)
 xc = [0 dx/2: dx :1-dx/2 1]';
@@ -82,6 +78,8 @@ D = div2D(k, m, dx, n, dy);
 
 % Building tensor components at Faces
 C11F = Yf_x.^2 + alpha*Xf_x.^2;
+% C12F_x = (alpha - 1).*Xf.*Yf;
+% C12F_y = (alpha - 1).*Xf.*Yf;
 C12F_x = (alpha - 1).*Xf_x.*Yf_x;
 C12F_y = (alpha - 1).*Xf_y.*Yf_y;
 % C12F_x = zeros(size(C12F_x));
@@ -91,22 +89,25 @@ C22F = Xf_y.^2 + alpha*Yf_y.^2;
 % Get dimension of Gradient Operator
 rowsGx = (m+1)*n;
 rowsGy = m*(n+1);
+
 Nx = rowsGx;
 Ny = rowsGy;
-
+Icf = interpolCentersToFacesD2D(k, m, n);
+Ifc = interpolFacesToCentersG2D(k, m, n);
+N  = (m+2)*(n+2);
 Cx2x = Icf(1:Nx, 1:N);                 % center scalar -> x-faces
 Cy2y = Icf(Nx+1:Nx+Ny, N+1:2*N);       % center scalar -> y-faces
-
 Fx2c = Ifc(1:N, 1:Nx);                 % x-faces -> center scalar
 Fy2c = Ifc(N+1:2*N, Nx+1:Nx+Ny);       % y-faces -> center scalar
-
 Iy2x = Cx2x * Fy2c;   % y-faces -> centers -> x-faces
 Ix2y = Cy2y * Fx2c;   % x-faces -> centers -> y-faces
 
+% Iy2x = buildYFacesToXFaces(m, n);
+% Ix2y = buildXFacesToYFaces(m, n);
 % Full Heterogeneous Anisotropic 2x2 Tensor at Faces
 K11 = spdiags(reshape(C11F, [], 1), 0, rowsGx, rowsGx);
-K12 = spdiags(C12F_x(:), 0, rowsGx, rowsGx) * Iy2x;
-K21 = spdiags(C12F_y(:), 0, rowsGy, rowsGy) * Ix2y;
+K12 = spdiags(reshape(C12F_x, [], 1), 0, rowsGx, rowsGx) * Iy2x;
+K21 = spdiags(reshape(C12F_y, [], 1), 0, rowsGy, rowsGy) * Ix2y;
 % K12 = spdiags(reshape(C12F_x, [], 1), 0, rowsGx, rowsGy);
 % K21 = spdiags(reshape(C12F_y, [], 1), 0, rowsGy, rowsGx);
 % K12 = sparse(rowsGx, rowsGy);
@@ -127,7 +128,6 @@ uxy = a^2 * (2*Xc - 1) .* (2*Yc - 1) .* ue;
 % Building tensor components at Centers (For RHS)
 C11 = Yc.^2 + alpha*Xc.^2;
 C1221 = (alpha - 1).*Xc.*Yc;
-C1221 = zeros(size(C1221));
 C22 = Xc.^2 + alpha*Yc.^2;
 
 % Tensor component derivatives at centers (For RHS)
@@ -154,6 +154,9 @@ L = -D*K*G;
 ua = L0\F0;
 ua = reshape(ua, m+2, n+2);
 
+err = ua - ue;
+fprintf('max abs err = %e\n', max(abs(err(:))));
+fprintf('rel L2 err   = %e\n', norm(err(:))/norm(ue(:)));
 
 % PLOTTING
 figure(69);
@@ -170,3 +173,121 @@ title(sprintf("Approximate Solution (alpha = %.2f)", alpha));
 shading interp;
 view([0 90]);
 colorbar;
+
+
+figure(1);
+contour3(Xc, Yc, err);
+title(sprintf('Error (alpha = %.2f)', alpha));
+view([0 90]);
+colorbar;
+
+
+% function Ix2y = buildXFacesToYFaces(m, n)
+% % Map x-face field ((m+1) x n) -> y-face field (m x (n+1))
+% % Uniform-grid, node-averaging transfer.
+% %
+% % Vectorization convention:
+% %   x-faces stored as reshape(Vx, [], 1) with size(Vx) = [m+1, n]
+% %   y-faces stored as reshape(Vy, [], 1) with size(Vy) = [m, n+1]
+%
+%     rowsGx = (m+1)*n;
+%     rowsGy = m*(n+1);
+%
+%     I = [];
+%     J = [];
+%     S = [];
+%
+%     for i = 1:m          % y-face x-index (centered in x)
+%         for j = 1:(n+1)  % y-face y-index (nodal in y)
+%
+%             row = sub2ind([m, n+1], i, j);
+%
+%             if j == 1
+%                 % bottom boundary: use first x-face column only
+%                 col1 = sub2ind([m+1, n], i,   1);
+%                 col2 = sub2ind([m+1, n], i+1, 1);
+%
+%                 I = [I; row; row];
+%                 J = [J; col1; col2];
+%                 S = [S; 0.5; 0.5];
+%
+%             elseif j == n+1
+%                 % top boundary: use last x-face column only
+%                 col1 = sub2ind([m+1, n], i,   n);
+%                 col2 = sub2ind([m+1, n], i+1, n);
+%
+%                 I = [I; row; row];
+%                 J = [J; col1; col2];
+%                 S = [S; 0.5; 0.5];
+%
+%             else
+%                 % interior: average four surrounding x-faces
+%                 col1 = sub2ind([m+1, n], i,   j-1);
+%                 col2 = sub2ind([m+1, n], i+1, j-1);
+%                 col3 = sub2ind([m+1, n], i,   j);
+%                 col4 = sub2ind([m+1, n], i+1, j);
+%
+%                 I = [I; row; row; row; row];
+%                 J = [J; col1; col2; col3; col4];
+%                 S = [S; 0.25; 0.25; 0.25; 0.25];
+%             end
+%         end
+%     end
+%
+%     Ix2y = sparse(I, J, S, rowsGy, rowsGx);
+% end
+%
+% function Iy2x = buildYFacesToXFaces(m, n)
+% % Map y-face field (m x (n+1)) -> x-face field ((m+1) x n)
+% % Uniform-grid, node-averaging transfer.
+% %
+% % Vectorization convention:
+% %   y-faces stored as reshape(Vy, [], 1) with size(Vy) = [m, n+1]
+% %   x-faces stored as reshape(Vx, [], 1) with size(Vx) = [m+1, n]
+%
+%     rowsGx = (m+1)*n;
+%     rowsGy = m*(n+1);
+%
+%     I = [];
+%     J = [];
+%     S = [];
+%
+%     for i = 1:(m+1)      % x-face x-index (nodal in x)
+%         for j = 1:n      % x-face y-index (centered in y)
+%
+%             row = sub2ind([m+1, n], i, j);
+%
+%             if i == 1
+%                 % left boundary: use first y-face row only
+%                 col1 = sub2ind([m, n+1], 1, j);
+%                 col2 = sub2ind([m, n+1], 1, j+1);
+%
+%                 I = [I; row; row];
+%                 J = [J; col1; col2];
+%                 S = [S; 0.5; 0.5];
+%
+%             elseif i == m+1
+%                 % right boundary: use last y-face row only
+%                 col1 = sub2ind([m, n+1], m, j);
+%                 col2 = sub2ind([m, n+1], m, j+1);
+%
+%                 I = [I; row; row];
+%                 J = [J; col1; col2];
+%                 S = [S; 0.5; 0.5];
+%
+%             else
+%                 % interior: average four surrounding y-faces
+%                 col1 = sub2ind([m, n+1], i-1, j);
+%                 col2 = sub2ind([m, n+1], i-1, j+1);
+%                 col3 = sub2ind([m, n+1], i,   j);
+%                 col4 = sub2ind([m, n+1], i,   j+1);
+%
+%                 I = [I; row; row; row; row];
+%                 J = [J; col1; col2; col3; col4];
+%                 S = [S; 0.25; 0.25; 0.25; 0.25];
+%             end
+%         end
+%     end
+%
+%     Iy2x = sparse(I, J, S, rowsGx, rowsGy);
+% end
