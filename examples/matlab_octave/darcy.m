@@ -24,8 +24,9 @@
 % =====================================================================
 
 function [errMax, errL2, qxErrL2, qyErrL2, uminVal, umaxVal] = darcy(m, n, alpha, plot=false)
-  % ---- grid ----
   addpath('../../src/matlab_octave');
+
+  % ---- grid ----
   k = 4;            % mimetic order (typical: 2, 4)
   % m = 32;            % cells in x
   % n = 32;            % cells in y
@@ -43,17 +44,6 @@ function [errMax, errL2, qxErrL2, qyErrL2, uminVal, umaxVal] = darcy(m, n, alpha
   xc = [0 dx/2: dx :1-dx/2 1]';
   yc = [0 dy/2: dy :1-dy/2 1]';
   [Yc,Xc] = meshgrid(yc, xc);
-
-  % interior cell centers 
-  xc_int = [dx/2: dx :1-dx/2]';
-  yc_int = [dy/2: dy :1-dy/2]';
-
-  % faces
-  xf = (0:dx:1)';
-  yf = (0:dy:1)';
-  % [Yf,Xf] = meshgrid(yf, xf);
-  [Yf_x, Xf_x] = meshgrid(yc_int, xf);    % (m+1) x n  → x-faces
-  [Yf_y, Xf_y] = meshgrid(yf, xc_int);    % m x (n+1)  → y-faces
 
   %Exact Solution (Calculated at the centers)
   a = -20 * pi;
@@ -73,11 +63,23 @@ function [errMax, errL2, qxErrL2, qyErrL2, uminVal, umaxVal] = darcy(m, n, alpha
   v = {bcl;bcr;bcb;bct};
 
 
+  % interior cell centers 
+  xc_int = [dx/2: dx :1-dx/2]';
+  yc_int = [dy/2: dy :1-dy/2]';
+
+  % faces
+  xf = (0:dx:1)';
+  yf = (0:dy:1)';
+  [Yf,Xf] = meshgrid(yf, xf);
+  [Yf_x, Xf_x] = meshgrid(yc_int, xf);    % (m+1) x n  → x-faces
+  [Yf_y, Xf_y] = meshgrid(yf, xc_int);    % m x (n+1)  → y-faces
 
   % Building tensor components at Faces
   C11F = Yf_x.^2 + alpha*Xf_x.^2;
   C12F_x = (alpha - 1).*Xf_x.*Yf_x;
   C12F_y = (alpha - 1).*Xf_y.*Yf_y;
+  % C12F_x = (alpha - 1).*Xf.*Yf;
+  % C12F_y = (alpha - 1).*Xf.*Yf;
   C22F = Xf_y.^2 + alpha*Yf_y.^2;
 
   Nx = (m+1)*n;
@@ -178,16 +180,18 @@ function [errMax, errL2, qxErrL2, qyErrL2, uminVal, umaxVal] = darcy(m, n, alpha
   umaxVal = max(ua(:));
 
   if plot
-    fprintf('max abs err = %e\n', max(abs(err(:))));
-    fprintf('rel L2 err   = %e\n', norm(err(:))/norm(ue(:)));
+    % fprintf('max abs err = %e\n', max(abs(err(:))));
+    % fprintf('rel L2 err   = %e\n', norm(err(:))/norm(ue(:)));
     % PLOTTING
     figure(1);
     contour3(Xc, Yc, ue);
+    hold on;
+    % quiver(Xcc, Ycc, qx_c, qy_c, 1.0, 'b');
     title(sprintf("Exact Solution (alpha = %.2f)", alpha));
     shading interp;
     view([0 90]);
     colorbar;
-
+    hold off;
 
     figure(2);
     contour3(Xc, Yc, ua);
@@ -209,12 +213,7 @@ function [errMax, errL2, qxErrL2, qyErrL2, uminVal, umaxVal] = darcy(m, n, alpha
     figure(4);
     [C,h] = contour(Xc, Yc, RHS, 10, 'LineWidth', 0.8);
     clabel(C, h, 'FontSize', 8);
-    axis square
-    xlim([0 1]); ylim([0 1]);
-    set(gca, 'FontName', 'Times', 'FontSize', 8, ...
-             'LineWidth', 0.8, 'TickDir', 'in');
-    title('(b) Source term f(x)', ...
-          'FontName', 'Times', 'FontSize', 10, 'FontWeight', 'normal');
+    title('(b) Source term f(x)');
   end
 end
 
