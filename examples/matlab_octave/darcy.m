@@ -21,10 +21,9 @@
 %     G : mimetic gradient, mapping cell-centers u -> faces
 %     D : mimetic divergence, mapping faces -> centers
 %     K : block tensor conductivity at faces
-%
 % =====================================================================
 
-function [errMax, errL2] = darcy(m, n, alpha)
+function [errMax, errL2, qxErrL2, qyErrL2, uminVal, umaxVal] = darcy(m, n, alpha, plot=false)
   % ---- grid ----
   addpath('../../src/matlab_octave');
   k = 4;            % mimetic order (typical: 2, 4)
@@ -32,6 +31,11 @@ function [errMax, errL2] = darcy(m, n, alpha)
   % n = 32;            % cells in y
   dx = 1/m;
   dy = 1/n;
+
+  % Gradient Operator
+  G = grad2D(k, m, dx, n, dy);
+  % Divergence Operator
+  D = div2D(k, m, dx, n, dy);
 
   % alpha = 100; % 1, 10, or 100
 
@@ -51,7 +55,6 @@ function [errMax, errL2] = darcy(m, n, alpha)
   [Yf_x, Xf_x] = meshgrid(yc_int, xf);    % (m+1) x n  → x-faces
   [Yf_y, Xf_y] = meshgrid(yf, xc_int);    % m x (n+1)  → y-faces
 
-
   %Exact Solution (Calculated at the centers)
   a = -20 * pi;
   z = (Xc - 0.5).^2 + (Yc - 0.5).^2;
@@ -70,10 +73,6 @@ function [errMax, errL2] = darcy(m, n, alpha)
   v = {bcl;bcr;bcb;bct};
 
 
-  % Gradient Operator
-  G = grad2D(k, m, dx, n, dy);
-  % Divergence Operator
-  D = div2D(k, m, dx, n, dy);
 
   % Building tensor components at Faces
   C11F = Yf_x.^2 + alpha*Xf_x.^2;
@@ -139,30 +138,84 @@ function [errMax, errL2] = darcy(m, n, alpha)
   err = ua - ue;
   errMax = max(abs(err(:)));
   errL2  = norm(err(:)) / norm(ue(:));
-  % fprintf('max abs err = %e\n', max(abs(err(:))));
-  % fprintf('rel L2 err   = %e\n', norm(err(:))/norm(ue(:)));
-  % PLOTTING
-  % figure(1);
-  % contour3(Xc, Yc, ue);
-  % title(sprintf("Exact Solution (alpha = %.2f)", alpha));
-  % shading interp;
-  % view([0 90]);
-  % colorbar;
-  %
-  %
-  % figure(2);
-  % contour3(Xc, Yc, ua);
-  % title(sprintf("Approximate Solution (alpha = %.2f)", alpha));
-  % shading interp;
-  % view([0 90]);
-  % colorbar;
-  %
-  %
-  % figure(3);
-  % contour3(Xc, Yc, err);
-  % title(sprintf('Error (alpha = %.2f)', alpha));
-  % view([0 90]);
-  % colorbar;
+
+  % numerical gradients on faces
+  g = G * ua(:);
+  uxh = reshape(g(1:Nx), m+1, n); % x-face gradient
+  uyh = reshape(g(Nx+1:end), m, n+1); % y-face gradient
+
+  % transported gradients
+  uy_on_x = reshape(Iy2x * uyh(:), m+1, n);
+  ux_on_y = reshape(Ix2y * uxh(:), m, n+1);
+
+  % numerical fluxes
+  qxh = -(C11F .* uxh + C12F_x .* uy_on_x);
+  qyh = -(C12F_y .* ux_on_y + C22F .* uyh);
+  qx_c = 0.5 * (qxh(1:m, :) + qxh(2:m+1, :));      % m x n
+  qy_c = 0.5 * (qyh(:, 1:n) + qyh(:, 2:n+1));      % m x n
+
+  [Xcc, Ycc] = meshgrid(xc_int, yc_int);
+  Xcc = Xcc'; Ycc = Ycc';
+  % exact solution on face grids
+  ue_xf = exp(a * ((Xf_x - 0.5).^2 + (Yf_x - 0.5).^2));
+  ue_yf = exp(a * ((Xf_y - 0.5).^2 + (Yf_y - 0.5).^2));
+
+  ux_exact_xf = a * (2*Xf_x - 1) .* ue_xf;
+  uy_exact_xf = a * (2*Yf_x - 1) .* ue_xf;
+  ux_exact_yf = a * (2*Xf_y - 1) .* ue_yf;
+  uy_exact_yf = a * (2*Yf_y - 1) .* ue_yf;
+
+  % exact fluxes
+  qx_exact = -(C11F .* ux_exact_xf + C12F_x .* uy_exact_xf);
+  qy_exact = -(C12F_y .* ux_exact_yf + C22F .* uy_exact_yf);
+
+  % flux errors
+  qxErrL2 = sqrt(dx*dy) * norm(qxh(:) - qx_exact(:), 2);
+  qyErrL2 = sqrt(dx*dy) * norm(qyh(:) - qy_exact(:), 2);
+
+  % min/max
+  uminVal = min(ua(:));
+  umaxVal = max(ua(:));
+
+  if plot
+    fprintf('max abs err = %e\n', max(abs(err(:))));
+    fprintf('rel L2 err   = %e\n', norm(err(:))/norm(ue(:)));
+    % PLOTTING
+    figure(1);
+    contour3(Xc, Yc, ue);
+    title(sprintf("Exact Solution (alpha = %.2f)", alpha));
+    shading interp;
+    view([0 90]);
+    colorbar;
+
+
+    figure(2);
+    contour3(Xc, Yc, ua);
+    hold on;
+    quiver(Xcc, Ycc, qx_c, qy_c, 1.0, 'b');
+    title(sprintf("Approximate Solution (alpha = %.2f)", alpha));
+    shading interp;
+    view([0 90]);
+    colorbar;
+    hold off;
+
+
+    figure(3);
+    contour3(Xc, Yc, err);
+    title(sprintf('Error (alpha = %.2f)', alpha));
+    view([0 90]);
+    colorbar;
+
+    figure(4);
+    [C,h] = contour(Xc, Yc, RHS, 10, 'LineWidth', 0.8);
+    clabel(C, h, 'FontSize', 8);
+    axis square
+    xlim([0 1]); ylim([0 1]);
+    set(gca, 'FontName', 'Times', 'FontSize', 8, ...
+             'LineWidth', 0.8, 'TickDir', 'in');
+    title('(b) Source term f(x)', ...
+          'FontName', 'Times', 'FontSize', 10, 'FontWeight', 'normal');
+  end
 end
 
 
