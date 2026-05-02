@@ -186,13 +186,13 @@ function [errMax, errL2, qxErrL2, qyErrL2, uminVal, umaxVal] = darcy(m, n, alpha
     figure(1);
     contour3(Xc, Yc, ue);
     hold on;
-    % quiver(Xcc, Ycc, qx_c, qy_c, 1.0, 'b');
+    quiver(Xcc, Ycc, qx_c, qy_c, 1.0, 'b');
     title(sprintf("Exact Solution (alpha = %.2f)", alpha));
     shading interp;
     view([0 90]);
     colorbar;
     hold off;
-
+    saveas(gcf,sprintf('/mnt/shared/COMP/670/Figures/Darcy_Exact_h%d_alpha%d.png', m, alpha))
     figure(2);
     contour3(Xc, Yc, ua);
     hold on;
@@ -202,6 +202,7 @@ function [errMax, errL2, qxErrL2, qyErrL2, uminVal, umaxVal] = darcy(m, n, alpha
     view([0 90]);
     colorbar;
     hold off;
+    saveas(gcf,sprintf('/mnt/shared/COMP/670/Figures/Darcy_Approx_h%d_alpha%d.png', m, alpha))
 
 
     figure(3);
@@ -209,6 +210,8 @@ function [errMax, errL2, qxErrL2, qyErrL2, uminVal, umaxVal] = darcy(m, n, alpha
     title(sprintf('Error (alpha = %.2f)', alpha));
     view([0 90]);
     colorbar;
+
+    saveas(gcf,sprintf('/mnt/shared/COMP/670/Figures/Darcy_Error_h%d_alpha%d.png', m, alpha))
 
     figure(4);
     [C,h] = contour(Xc, Yc, RHS, 10, 'LineWidth', 0.8);
