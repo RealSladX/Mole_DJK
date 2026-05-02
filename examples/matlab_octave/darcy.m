@@ -131,7 +131,7 @@ function [errMax, errL2, qxErrL2, qyErrL2, uminVal, umaxVal] = darcy(m, n, alpha
   RHS = -(dxdot + dydot);
   F = reshape(RHS, [], 1); 
 
-  % Build System of Equations
+  % SOLVE
   L = -D*K*G;
   [L0, F0] = addScalarBC2D(L, F, k, m, dx, n, dy, dc, nc, v);
   ua = L0\F0;
@@ -180,8 +180,6 @@ function [errMax, errL2, qxErrL2, qyErrL2, uminVal, umaxVal] = darcy(m, n, alpha
   umaxVal = max(ua(:));
 
   if plot
-    % fprintf('max abs err = %e\n', max(abs(err(:))));
-    % fprintf('rel L2 err   = %e\n', norm(err(:))/norm(ue(:)));
     % PLOTTING
     figure(1);
     contour3(Xc, Yc, ue);
@@ -192,7 +190,8 @@ function [errMax, errL2, qxErrL2, qyErrL2, uminVal, umaxVal] = darcy(m, n, alpha
     view([0 90]);
     colorbar;
     hold off;
-    saveas(gcf,sprintf('/mnt/shared/COMP/670/Figures/Darcy_Exact_h%d_alpha%d.png', m, alpha))
+    saveas(gcf,sprintf('./Darcy_Exact_h%d_alpha%d.png', m, alpha))
+
     figure(2);
     contour3(Xc, Yc, ua);
     hold on;
@@ -202,21 +201,14 @@ function [errMax, errL2, qxErrL2, qyErrL2, uminVal, umaxVal] = darcy(m, n, alpha
     view([0 90]);
     colorbar;
     hold off;
-    saveas(gcf,sprintf('/mnt/shared/COMP/670/Figures/Darcy_Approx_h%d_alpha%d.png', m, alpha))
-
+    saveas(gcf,sprintf('./Darcy_Approx_h%d_alpha%d.png', m, alpha))
 
     figure(3);
     contour3(Xc, Yc, err);
     title(sprintf('Error (alpha = %.2f)', alpha));
     view([0 90]);
     colorbar;
-
-    saveas(gcf,sprintf('/mnt/shared/COMP/670/Figures/Darcy_Error_h%d_alpha%d.png', m, alpha))
-
-    figure(4);
-    [C,h] = contour(Xc, Yc, RHS, 10, 'LineWidth', 0.8);
-    clabel(C, h, 'FontSize', 8);
-    title('(b) Source term f(x)');
+    saveas(gcf,sprintf('./Darcy_Error_h%d_alpha%d.png', m, alpha))
   end
 end
 
